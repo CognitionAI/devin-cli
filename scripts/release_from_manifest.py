@@ -64,14 +64,57 @@ def validate_manifest(manifest: dict) -> tuple[str, dict]:
     return version, platforms
 
 
-def release_exists(tag: str) -> bool:
-    """Return True if a GitHub release with the given tag already exists."""
+def get_release_asset_names(tag: str) -> set[str] | None:
+    """Return the asset names of an existing release, or None if it doesn't exist."""
     result = subprocess.run(
-        ["gh", "release", "view", tag],
+        ["gh", "release", "view", tag, "--json", "assets", "--jq", ".assets[].name"],
         capture_output=True,
         text=True,
     )
-    return result.returncode == 0
+    if result.returncode != 0:
+        return None
+    return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+
+
+def plan_filenames(platforms: dict) -> dict[str, str]:
+    """Map each unique binary URL to a validated, collision-free filename.
+
+    Multiple platform keys can point at the same file; each unique URL appears
+    once. Raises on unsafe filenames or distinct URLs that share a filename.
+    """
+    expected_by_url: dict[str, str] = {}
+    for name, target in platforms.items():
+        url = target["url"]
+        sha256 = target["sha256"]
+        existing = expected_by_url.get(url)
+        if existing is not None and existing != sha256:
+            raise ValueError(
+                f"Conflicting sha256 for {url}: {existing} vs {sha256} (platform {name})"
+            )
+        expected_by_url[url] = sha256
+
+    filename_by_url: dict[str, str] = {}
+    seen: dict[str, str] = {}
+    for url in sorted(expected_by_url):
+        filename = url.rsplit("/", 1)[-1]
+        if not filename or "/" in filename or filename in {".", ".."}:
+            raise ValueError(f"Refusing to use unsafe asset filename from {url}")
+        if filename == MANIFEST_ASSET_NAME:
+            raise ValueError(f"Asset filename collides with manifest asset: {url}")
+        # Distinct URLs sharing a filename would overwrite each other on disk and
+        # ship a duplicate binary, so reject them outright.
+        if filename in seen:
+            raise ValueError(
+                f"Asset filename collision for {filename!r}: {seen[filename]} and {url}"
+            )
+        seen[filename] = url
+        filename_by_url[url] = filename
+    return filename_by_url
+
+
+def expected_asset_names(platforms: dict) -> set[str]:
+    """Names of every asset a complete release should contain."""
+    return set(plan_filenames(platforms).values()) | {MANIFEST_ASSET_NAME}
 
 
 def download(url: str, dest: Path) -> str:
@@ -90,40 +133,13 @@ def download(url: str, dest: Path) -> str:
 
 def download_assets(platforms: dict, work_dir: Path) -> list[Path]:
     """Download every unique binary, verifying sha256. Returns asset paths."""
-    # Multiple platform keys can point at the same file; download each once.
-    expected_by_url: dict[str, str] = {}
-    for name, target in platforms.items():
-        url = target["url"]
-        sha256 = target["sha256"]
-        existing = expected_by_url.get(url)
-        if existing is not None and existing != sha256:
-            raise ValueError(
-                f"Conflicting sha256 for {url}: {existing} vs {sha256} (platform {name})"
-            )
-        expected_by_url[url] = sha256
-
-    filename_by_url: dict[str, str] = {}
-    for url in sorted(expected_by_url):
-        filename = url.rsplit("/", 1)[-1]
-        if not filename or "/" in filename or filename in {".", ".."}:
-            raise ValueError(f"Refusing to use unsafe asset filename from {url}")
-        if filename == MANIFEST_ASSET_NAME:
-            raise ValueError(f"Asset filename collides with manifest asset: {url}")
-        filename_by_url[url] = filename
-
-    # Distinct URLs that map to the same filename would overwrite each other on
-    # disk and ship a duplicate binary, so reject them outright.
-    seen: dict[str, str] = {}
-    for url, filename in filename_by_url.items():
-        if filename in seen:
-            raise ValueError(
-                f"Asset filename collision for {filename!r}: {seen[filename]} and {url}"
-            )
-        seen[filename] = url
+    filename_by_url = plan_filenames(platforms)
+    sha_by_url = {target["url"]: target["sha256"] for target in platforms.values()}
 
     assets: list[Path] = []
-    for url, expected_sha in sorted(expected_by_url.items()):
-        dest = work_dir / filename_by_url[url]
+    for url, filename in sorted(filename_by_url.items()):
+        dest = work_dir / filename
+        expected_sha = sha_by_url[url]
         print(f"Downloading {url}", flush=True)
         actual_sha = download(url, dest)
         if actual_sha != expected_sha:
@@ -153,18 +169,17 @@ def build_release_notes(version: str, platforms: dict) -> str:
     return "\n".join(lines)
 
 
-def create_release(tag: str, version: str, notes: str, assets: list[Path]) -> None:
-    """Create a GitHub release with the given assets via the gh CLI."""
-    cmd = [
-        "gh",
-        "release",
-        "create",
-        tag,
-        "--title",
-        version,
-        "--notes",
-        notes,
-    ]
+def create_release(tag: str, version: str, notes: str) -> None:
+    """Create an (empty) GitHub release via the gh CLI."""
+    subprocess.run(
+        ["gh", "release", "create", tag, "--title", version, "--notes", notes],
+        check=True,
+    )
+
+
+def upload_assets(tag: str, assets: list[Path]) -> None:
+    """Upload (clobbering) assets to an existing release via the gh CLI."""
+    cmd = ["gh", "release", "upload", tag, "--clobber"]
     cmd.extend(str(asset) for asset in assets)
     subprocess.run(cmd, check=True)
 
@@ -203,11 +218,23 @@ def main() -> int:
     tag = version
     print(f"Manifest version: {version}")
 
-    if release_exists(tag):
-        print(f"Release {tag} already exists; nothing to do.")
+    try:
+        expected_names = expected_asset_names(platforms)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    existing_names = get_release_asset_names(tag)
+    if existing_names is not None and expected_names <= existing_names:
+        print(f"Release {tag} already exists with all expected assets; nothing to do.")
         return 0
 
-    print(f"Release {tag} does not exist yet.")
+    if existing_names is None:
+        print(f"Release {tag} does not exist yet.")
+    else:
+        missing = sorted(expected_names - existing_names)
+        print(f"Release {tag} exists but is missing assets: {', '.join(missing)}")
+
     if args.check:
         return NEW_VERSION_EXIT_CODE
 
@@ -224,10 +251,17 @@ def main() -> int:
     manifest_asset.write_text(json.dumps(manifest, indent=2) + "\n")
     assets.append(manifest_asset)
 
-    notes = build_release_notes(version, platforms)
-    print(f"Creating release {tag} with {len(assets)} assets...")
-    create_release(tag, version, notes, assets)
-    print(f"Created release {tag}.")
+    # Create the release first if needed, then upload assets with --clobber. This
+    # is idempotent: a run that died mid-upload (leaving a partial release) is
+    # completed by the next run instead of being skipped.
+    if existing_names is None:
+        notes = build_release_notes(version, platforms)
+        print(f"Creating release {tag}...")
+        create_release(tag, version, notes)
+
+    print(f"Uploading {len(assets)} assets to release {tag}...")
+    upload_assets(tag, assets)
+    print(f"Release {tag} is complete.")
     return 0
 
 
