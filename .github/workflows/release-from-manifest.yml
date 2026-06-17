@@ -1,0 +1,31 @@
+name: Release from manifest
+
+on:
+  schedule:
+    # Run hourly at minute 0
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-from-manifest
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Create release for new manifest version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/release_from_manifest.py
