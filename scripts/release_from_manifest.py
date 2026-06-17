@@ -29,6 +29,7 @@ from pathlib import Path
 MANIFEST_URL = "https://static.devin.ai/cli/current/manifest.json"
 USER_AGENT = "devin-cli-release-bot/1.0"
 DOWNLOAD_CHUNK = 1024 * 1024
+MANIFEST_ASSET_NAME = "manifest.json"
 
 NEW_VERSION_EXIT_CODE = 10
 
@@ -101,12 +102,28 @@ def download_assets(platforms: dict, work_dir: Path) -> list[Path]:
             )
         expected_by_url[url] = sha256
 
-    assets: list[Path] = []
-    for url, expected_sha in sorted(expected_by_url.items()):
+    filename_by_url: dict[str, str] = {}
+    for url in sorted(expected_by_url):
         filename = url.rsplit("/", 1)[-1]
         if not filename or "/" in filename or filename in {".", ".."}:
             raise ValueError(f"Refusing to use unsafe asset filename from {url}")
-        dest = work_dir / filename
+        if filename == MANIFEST_ASSET_NAME:
+            raise ValueError(f"Asset filename collides with manifest asset: {url}")
+        filename_by_url[url] = filename
+
+    # Distinct URLs that map to the same filename would overwrite each other on
+    # disk and ship a duplicate binary, so reject them outright.
+    seen: dict[str, str] = {}
+    for url, filename in filename_by_url.items():
+        if filename in seen:
+            raise ValueError(
+                f"Asset filename collision for {filename!r}: {seen[filename]} and {url}"
+            )
+        seen[filename] = url
+
+    assets: list[Path] = []
+    for url, expected_sha in sorted(expected_by_url.items()):
+        dest = work_dir / filename_by_url[url]
         print(f"Downloading {url}", flush=True)
         actual_sha = download(url, dest)
         if actual_sha != expected_sha:
@@ -203,7 +220,7 @@ def main() -> int:
         print(f"ERROR: failed to download assets: {exc}", file=sys.stderr)
         return 1
 
-    manifest_asset = work_dir / "manifest.json"
+    manifest_asset = work_dir / MANIFEST_ASSET_NAME
     manifest_asset.write_text(json.dumps(manifest, indent=2) + "\n")
     assets.append(manifest_asset)
 
