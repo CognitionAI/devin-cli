@@ -5,6 +5,7 @@
 "use strict";
 
 const { spawn } = require("child_process");
+const fs = require("fs");
 const path = require("path");
 
 const PLATFORMS = new Set([
@@ -46,15 +47,34 @@ child.on("error", (error) => {
   fail(`failed to start ${binary}: ${error.message}`);
 });
 
-// Signals sent to the launcher alone (e.g. `kill <pid>`) must reach the CLI.
+// A terminal delivers Ctrl+C and hangup to the whole foreground process group,
+// so the CLI already receives them; forwarding would deliver them twice (and on
+// Windows child.kill() terminates the CLI outright). Without a terminal, a
+// signal sent to the launcher alone (e.g. `kill <pid>`) must be passed on.
+function sharesTerminalWithChild() {
+  if (process.platform === "win32") {
+    return true;
+  }
+  try {
+    fs.closeSync(fs.openSync("/dev/tty", "r"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const terminalSignals = sharesTerminalWithChild() ? new Set(["SIGINT", "SIGHUP"]) : new Set();
+
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+  // The handler also keeps the launcher alive until the CLI has exited.
   process.on(signal, () => {
-    if (!child.killed) {
-      try {
-        child.kill(signal);
-      } catch {
-        // The child already exited.
-      }
+    if (terminalSignals.has(signal) || child.exitCode !== null || child.signalCode !== null) {
+      return;
+    }
+    try {
+      child.kill(signal);
+    } catch {
+      // The child already exited.
     }
   });
 }

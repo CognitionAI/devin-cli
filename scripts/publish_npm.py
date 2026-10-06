@@ -75,11 +75,19 @@ def fetch(url: str) -> bytes:
         return response.read()
 
 
+# Semantic version with an optional prerelease (e.g. 2026.5.26-7) and no build
+# metadata, which npm strips. Platform packages append "-<os>-<cpu>" to it.
+SEMVER_RE = re.compile(
+    r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
+    r"(-(0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?"
+)
+
+
 def get_version(manifest: dict) -> str:
-    """Extract the version; npm needs plain major.minor.patch for the latest tag."""
+    """Extract the version and check that npm will accept it."""
     version = manifest.get("version")
-    if not isinstance(version, str) or not re.fullmatch(r"(0|[1-9]\d*)(\.(0|[1-9]\d*)){2}", version):
-        raise ValueError(f"Manifest version is not major.minor.patch: {version!r}")
+    if not isinstance(version, str) or not SEMVER_RE.fullmatch(version):
+        raise ValueError(f"Manifest version is not a valid npm version: {version!r}")
     return version
 
 
@@ -114,7 +122,7 @@ def safe_extract(archive: Path, dest: Path) -> None:
                 check(member.name)
                 if not (member.isfile() or member.isdir()):
                     raise ValueError(f"Unexpected archive entry type: {member.name}")
-            tf.extractall(dest)
+            tf.extractall(dest, filter="data")
 
 
 def build_platform_package(version: str, npm_os: str, cpu: str, entry: dict, out: Path) -> Path:
