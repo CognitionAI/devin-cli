@@ -168,6 +168,7 @@ def build_launcher_package(version: str, out: Path) -> Path:
     if pkg_dir.exists():
         shutil.rmtree(pkg_dir)
     shutil.copytree(LAUNCHER_DIR, pkg_dir)
+    shutil.copy(REPO_ROOT / "README.md", pkg_dir / "README.md")
     package_json = {
         "name": PACKAGE_NAME,
         "version": version,
