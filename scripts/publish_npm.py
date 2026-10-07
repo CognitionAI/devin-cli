@@ -21,8 +21,9 @@ Usage:
     # Publish whatever is missing for the current manifest version
     python scripts/publish_npm.py
 
-Environment variables:
-    NODE_AUTH_TOKEN: npm token, read by the .npmrc that actions/setup-node writes.
+Authentication is whatever `npm publish` finds: in GitHub Actions the workflow
+relies on npm trusted publishing (OIDC, npm >= 11.5.1), locally an `npm login`
+or an .npmrc token works.
 """
 
 import argparse

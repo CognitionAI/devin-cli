@@ -6,9 +6,12 @@ on:
     - cron: "15 * * * *"
   workflow_dispatch:
 
+# Authenticates to npm with trusted publishing (OIDC): the `devin` package must
+# list this repository and workflow file as a trusted publisher on npmjs.com.
+# No npm token is stored; provenance attestations are generated automatically.
 permissions:
   contents: read
-  id-token: write # npm provenance
+  id-token: write
 
 concurrency:
   group: publish-npm
@@ -17,36 +20,23 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
-      - name: Check for npm token
-        id: token
-        run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "::notice::NPM_TOKEN secret is not set; skipping npm publish."
-            echo "available=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Checkout repository
-        if: steps.token.outputs.available == 'true'
         uses: actions/checkout@v4
 
       - name: Set up Python
-        if: steps.token.outputs.available == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Set up Node
-        if: steps.token.outputs.available == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          registry-url: "https://registry.npmjs.org"
+
+      # Trusted publishing needs npm >= 11.5.1; Node 22 bundles npm 10.
+      - name: Update npm
+        run: npm install -g npm@latest && npm --version
 
       - name: Publish new manifest version to npm
-        if: steps.token.outputs.available == 'true'
         run: python scripts/publish_npm.py --provenance
