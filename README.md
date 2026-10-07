@@ -1,6 +1,8 @@
 # devin-cli
 
-Try Devin CLI: https://docs.devin.ai/cli
+Release automation for [Devin CLI](https://docs.devin.ai/cli). The README that
+npm shows for the `devin` package is [`npm/README.md`](npm/README.md); the demo
+gif it embeds is `assets/devin-cli.gif`.
 
 ## Install with npm
 
