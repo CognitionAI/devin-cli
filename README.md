@@ -102,15 +102,3 @@ To update:
 ```sh
 npm install -g devin@latest
 ```
-
-## How this package is published
-
-This repository holds the npm distribution of Devin CLI, not the CLI source.
-`scripts/publish_npm.py` (run hourly by `.github/workflows/publish-npm.yml`)
-repackages each new stable release from `static.devin.ai` into the `devin` npm
-package: the launcher in `npm/` plus one `devin@<version>-<os>-<cpu>` package
-per platform, verified against the release manifest's SHA-256 digests. The
-workflow authenticates with
-[npm trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC) from
-`CognitionAI/devin-cli` / `publish-npm.yml`; no token is stored in the
-repository.
