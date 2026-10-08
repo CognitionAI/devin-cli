@@ -34,6 +34,14 @@ The workflow uses [npm trusted publishing](https://docs.npmjs.com/trusted-publis
 `devin-cli`, workflow `publish-npm.yml` (no environment) as its trusted
 publisher.
 
+## Tests
+
+With Python and npm on `PATH`, run the packaging tests without publishing:
+
+```sh
+python -m unittest discover -s tests -v
+```
+
 ## GitHub releases
 
 `scripts/release_from_manifest.py` (run hourly by
