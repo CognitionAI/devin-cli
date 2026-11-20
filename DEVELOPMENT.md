@@ -39,8 +39,3 @@ publisher.
 `scripts/release_from_manifest.py` (run hourly by
 `.github/workflows/release-from-manifest.yml`) creates a GitHub release for
 each new manifest version.
-
-## Demo gif
-
-`assets/devin-cli.gif` is a [vhs](https://github.com/charmbracelet/vhs)
-recording of the stable binary; re-record it when the UI changes noticeably.
