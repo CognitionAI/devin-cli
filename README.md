@@ -1,6 +1,9 @@
 # Devin CLI
 
-Devin, in your terminal.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/CognitionAI/devin-cli/main/assets/hero-dark.png" />
+  <img src="https://raw.githubusercontent.com/CognitionAI/devin-cli/main/assets/hero-light.png" alt="Devin, in your terminal." width="75%" />
+</picture>
 
 ## Install
 
@@ -40,7 +43,10 @@ Run `/model` to open the model picker, or name a model directly.
 devin --model opus -- refactor this module
 ```
 
-<img src="https://raw.githubusercontent.com/CognitionAI/devin-cli/main/assets/model-picker.png" alt="The /model picker listing models with their effort level, fast mode and pricing" width="75%" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/CognitionAI/devin-cli/main/assets/model-picker-dark.png" />
+  <img src="https://raw.githubusercontent.com/CognitionAI/devin-cli/main/assets/model-picker-light.png" alt="The /model picker listing models with their effort level, fast mode and pricing" width="75%" />
+</picture>
 
 > [!TIP]
 > Pin a model with <kbd>Alt+P</kbd> and cycle between pinned models with <kbd>Alt+N</kbd>.
