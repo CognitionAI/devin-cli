@@ -7,6 +7,8 @@
 
 ## Install
 
+macOS and Linux
+
 ```sh
 curl -fsSL https://cli.devin.ai/install.sh | bash
 ```
@@ -28,10 +30,10 @@ Update with `/update`, or `npm install -g devin@latest` for npm installs.
 ## Get Started
 
 ```sh
-devin
-devin -- fix the failing test
-devin --continue
-devin --resume
+devin                           # start a session
+devin -- fix the failing test   # start with a prompt
+devin --continue                # continue your last session
+devin --resume                  # pick a session to resume
 ```
 
 ## Model Selection
@@ -79,8 +81,10 @@ Fusion pairs a frontier lead model with a cheaper sidekick. The lead makes the d
 
 ## Headless
 
+Print the response and exit, for scripts and CI.
+
 ```sh
-devin -p
+devin -p "fix the failing test"
 ```
 
 ## Cloud
@@ -100,6 +104,8 @@ devin --cloud -p "fix flaky CI tests"
 Use `/handoff` to move a session between local and cloud.
 
 ## SSH
+
+Open a shell on a cloud session's machine.
 
 ```
 devin ssh
