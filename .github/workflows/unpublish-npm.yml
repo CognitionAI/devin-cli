@@ -1,0 +1,54 @@
+name: Unpublish a yanked npm release
+run-name: "npm ${{ inputs.execute && 'unpublish' || 'preview' }}: devin@${{ inputs.version }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact yanked Stable CLI version (X.Y.Z)
+        required: true
+        type: string
+      execute:
+        description: Permanently unpublish (requires environment approval)
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: List the exact affected versions
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: python3 scripts/unpublish_npm.py "$RELEASE_VERSION"
+
+  unpublish:
+    if: github.ref == 'refs/heads/main' && inputs.execute
+    needs: preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: npm-unpublish
+    concurrency:
+      group: npm-unpublish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org/
+      - name: Unpublish and verify exact versions
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_UNPUBLISH_TOKEN }}
+        run: python3 scripts/unpublish_npm.py "$RELEASE_VERSION" --execute

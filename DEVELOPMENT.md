@@ -34,6 +34,32 @@ The workflow uses [npm trusted publishing](https://docs.npmjs.com/trusted-publis
 `devin-cli`, workflow `publish-npm.yml` (no environment) as its trusted
 publisher.
 
+### Unpublish a yanked release
+
+Unpublishing is permanent and separate from yanking the CDN and container
+artifacts. In Actions, run **Unpublish a yanked npm release** on `main` with the
+exact Stable version (for example, `3000.12.1`). Leave **execute** off for a
+read-only preview. With it on, review the preview before approving the
+`npm-unpublish` environment deployment.
+
+Before enabling execution, a repository admin must configure the
+[`npm-unpublish` environment](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments)
+to allow only `main`, require release-owner reviewers, prevent self-review,
+and disallow bypassing protection rules. Set `NPM_UNPUBLISH_TOKEN` as an
+**environment secret**, not a repository or organization secret. npm trusted
+publishing cannot unpublish. For an approved removal, an npm maintainer can
+provide a short-lived [granular token](https://docs.npmjs.com/about-access-tokens/)
+with write access limited to `devin`, if the package's npm settings permit it.
+Remove the secret and revoke the token after use. Do not relax npm's package
+security settings to run this workflow.
+
+The job refuses the current Stable version or any version with an active npm
+dist-tag. It removes the launcher first, then the platform variants, and checks
+that the original tarball URLs no longer respond. A partial run can be retried
+with the same version. If npm blocks removal under its
+[unpublish policy](https://docs.npmjs.com/policies/unpublish/), contact npm
+Support; deprecation does not remove the tarballs.
+
 ## GitHub releases
 
 `scripts/release_from_manifest.py` (run hourly by
