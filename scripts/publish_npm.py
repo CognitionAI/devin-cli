@@ -186,7 +186,7 @@ def build_launcher_package(version: str, out: Path) -> Path:
 
 
 def npm(args: list[str], cwd: Path) -> None:
-    subprocess.run(["npm", *args], cwd=cwd, check=True)
+    subprocess.run([shutil.which("npm") or "npm", *args], cwd=cwd, check=True)
 
 
 def release(pkg_dir: Path, tag: str, registry: str, publish: bool, provenance: bool) -> None:
